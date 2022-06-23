@@ -142,7 +142,7 @@ class Piece(object):
         self.x = x
         self.y = y
         self.shape = shape
-        self.color = shape_colors[shape.index(shape)]
+        self.color = shape_colors[shapes.index(shape)]
         self.rotation = 0
 
 
@@ -198,7 +198,11 @@ def valid_space(shape, grid):
 
 # функция проверки условия проигрыша в игре
 def check_lost(positions):
-    pass
+    for pos in positions:
+        x, y = pos
+        if y < 1:
+            return True
+    return False
 
 
 # функция получения фигуры
@@ -208,8 +212,15 @@ def get_shape():
 
 
 # функция отрисовки текста посередине
-def draw_text_middle(text, size, color, surface):
-    pass
+def draw_text_middle(surface, text, size, color):
+    # устанавливаем шрифт для отображения текста посередине
+    font = pygame.font.SysFont('comicsans', size, bold=True)
+    # задаём текст для отображения
+    label = font.render(text, 1, color)
+
+    # отображаем текст в середине экрана
+    surface.blit(label, (TOP_LEFT_X + PLAY_WIDTH / 2 - (label.get_width() / 2), TOP_LEFT_Y + PLAY_HEIGHT / 2
+                         - label.get_height() / 2))
 
 
 # функция отрисовки сетки игрового поля
@@ -230,16 +241,58 @@ def draw_grid(surface, grid):
 
 # функция очистки игровой сетки
 def clear_rows(grid, locked):
-    pass
+    # переменная счётчика (инкремент)
+    inc = 0
+    # обратный цикл по строкам сетки игры
+    for i in range(len(grid) - 1, -1, -1):
+        row = grid[i]
+        # если в строке нет квадратов чёрного цвета
+        if (0, 0, 0) not in row:
+            # увеличиваем счётчик инкремента на 1
+            inc += 1
+            # запоминаем индекс строки
+            ind = 1
+            # пытаемся удалить строку из словаря занятых позиций на игровой сетке
+            for j in range(len(row)):
+                try:
+                    del locked[[(j, i)]]
+                # в противном случае - продолжаем обход в цикле
+                except:
+                    continue
+        # cдвигаем все оставшиеся строки на то кол-во строк, которое было удалено,
+        # путём добавления их в начало списка сетки игры
+        # [(0, 1), (0, 0)] --> [(0, 0), (0, 1)]
+        if inc > 0:
+            for key in sorted(list(locked), key=lambda x: x[1])[::-1]:
+                x, y = key
+                if y < ind:
+                    newKey = (x, y + inc)
+                    locked[newKey] = locked.pop(key)
+        return inc
 
 
 # функция отрисовки следующей игровой фигуры
 def draw_next_shape(shape, surface):
-    pass
+    # установка шрифта для показа следующей фигуры
+    font = pygame.font.SysFont('comicsans', 30)
+    label = font.render('Следующая:', 1, (255, 255, 255))
+    # начальные координаты x и y для показа следующей фигуры
+    sx = TOP_LEFT_X + PLAY_WIDTH + 50
+    sy = TOP_LEFT_Y + PLAY_HEIGHT / 2 - 100
+    format = shape.shape[shape.rotation % len(shape.shape)]
+    # рисуем и отображаем окно, где будет показываться следующая фигура
+    for i, line in enumerate(format):
+        row = list(line)
+        for j, column in enumerate(row):
+            if column == '0':
+                pygame.draw.rect(surface, shape.color, (sx + j * BLOCK_SIZE, sy + i * BLOCK_SIZE,
+                                                        BLOCK_SIZE, BLOCK_SIZE), 0)
+    # отображаем текст "следующая фигура" по заданным координатам x и y
+    surface.blit(label, (sx + 10, sy - 30))
 
 
 # функция отрисовки окна игрового поля
-def draw_window(surface, grid):
+def draw_window(surface, grid, score=0):
     # заполняем экран игры чёрным цветом
     surface.fill((0, 0, 0))
 
@@ -252,6 +305,21 @@ def draw_window(surface, grid):
 
     # показываем название игры в центре экрана
     surface.blit(label, (TOP_LEFT_X + PLAY_WIDTH / 2 - (label.get_width() / 2), 30))
+
+    # установка шрифта для показа текущих очков
+    font = pygame.font.SysFont('comicsans', 30)
+    label = font.render('Очки: ' + str(score), 1, (255, 255, 255))
+    # Начальные координаты x и y для показа текущих очков
+    sx = TOP_LEFT_X + PLAY_WIDTH + 50
+    sy = TOP_LEFT_X + PLAY_HEIGHT / 2 - 100
+    surface.blit(label, (sx + 10, sy + 160))
+    # отображение рекордов по очкам
+    # font = pygame.font.SysFont('comicsans', 30)
+    # label = font.render('Рекорд: ' + last_score, 1, (255, 255, 255))
+    # # Начальные координаты x и y для показа рекордов по очкам
+    # sx = TOP_LEFT_X - 200
+    # sy = TOP_LEFT_Y + 200
+    # surface.blit(label, (sx + 10, sy + 160))
 
     for i in range(len(grid)):
         for j in range(len(grid[i])):
@@ -279,13 +347,15 @@ def main(win):
     # cледующая фигура
     next_piece = get_shape()
     # внутриигровое время
-    сlock = pygame.time.Clock()
+    clock = pygame.time.Clock()
     # время падения фигуры
     fall_time = 0
     # скорость падения фигуры
     fall_speed = 0.60
     # время увеличения скорости падения фигур на конкретном уровне
     level_time = 0
+    # заработанные очки
+    score = 0
 
     # оcновной игровой цикл
     while run:
@@ -293,10 +363,10 @@ def main(win):
         grid = create_grid(locked_positions)
         # высчитываем время падения, исходя из разницы времён
         # между предыдущей итерацией цикла и текущей
-        fall_time += сlock.get_rawtime()
+        fall_time += clock.get_rawtime()
         # высчитываем время падения фигур на конкретном уровне
-        level_time += сlock.get_rawtime()
-        сlock.tick()
+        level_time += clock.get_rawtime()
+        clock.tick()
 
         # если время падения фигуры на уровне больше 5 секунд
         if level_time / 1000 > 5:
@@ -310,7 +380,7 @@ def main(win):
             #  то мы обнуляем время падения
             fall_time = 0
             # уменьшаем координату y текущей фигуры на 1
-            current_piece.y -= 1
+            current_piece.y += 1
             # если пространства сетки игрового поля не хватает, и координата y текущей фигуры больше 0
             if not (valid_space(current_piece, grid)) and current_piece.y > 0:
                 # уменьшаем координату y на 1
@@ -330,31 +400,53 @@ def main(win):
                     # уменьшаем на 1  координату x текущей фигуры
                     current_piece.x -= 1
                     # если пространства достаточно
-                    if not(valid_space(current_piece, grid)):
+                    if not (valid_space(current_piece, grid)):
                         # увеличиваем координату x текущей фигуры на 1
                         current_piece.x += 1
                 # если нажата клавиша "стрелка вправо"
                 if event.key == pygame.K_RIGHT:
                     # увеличиваем на 1 координату x текущей фигуры
-                    current_piece += 1
-                    if not(valid_space(current_piece, grid)):
-                        current_piece -= 1
+                    current_piece.x += 1
+                    if not (valid_space(current_piece, grid)):
+                        current_piece.x -= 1
                 # если нажата клавиша "стрелка вниз"
                 if event.key == pygame.K_DOWN:
                     # увеличиваем на 1 координату y текущей фигуры
                     current_piece.y += 1
-                    if not(valid_space(current_piece, grid)):
+                    if not (valid_space(current_piece, grid)):
                         current_piece.y -= 1
                 # если нажата клавиша "стрелка вверх"
                 if event.key == pygame.K_UP:
                     # вращаем фигуру
                     current_piece.rotation += 1
-                    if not(valid_space(current_piece, grid)):
+                    if not (valid_space(current_piece, grid)):
                         current_piece.rotation -= 1
 
+        shape_pos = convert_shape_format(current_piece)
+
+        for i in range(len(shape_pos)):
+            x, y = shape_pos[i]
+            if y > -1:
+                grid[y][x] = current_piece.color
+
+        # если фигура сменилась
+        if change_piece:
+            for pos in shape_pos:
+                p = (pos[0], pos[1])
+                # {(1, 2): (255, 0, 0)}
+                locked_positions[p] = current_piece.color
+            current_piece = next_piece
+            next_piece = get_shape()
+            change_piece = False
+            # очищаем строки и добавляем их в кол-во заработанных игроком очков
+            score += clear_rows(grid, locked_positions) * 10
+
         # вызов функции отрисовки основного окна игры
-        draw_window(win, grid)
+        draw_window(win, grid, score)
+        # вызов функции отображения следующей фигуры
+        draw_next_shape(next_piece, win)
         pygame.display.update()
+    # pygame.display.quit()
 
 
 # функция отображения главного меню
