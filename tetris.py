@@ -158,15 +158,41 @@ def create_grid(locked_positions={}):
     return grid
 
 
-
 # функция преобразования формата фигуры
 def convert_shape_format(shape):
-    pass
+    # список координат позиций на игровой сетке
+    positions = []
+    # преобразование в формат фигуры
+    format = shape.shape[shape.rotation % len(shape.shape)]
+
+    for i, line in enumerate(format):
+        row = list(line)
+        # '..0..'
+        for j, column in enumerate(row):
+            if column == '0':
+                positions.append((shape.x + j, shape.y + i))
+    for i, pos in enumerate(positions):
+        positions[i] = (pos[0] - 2, pos[1] - 4)
+    return positions
 
 
 # функция проверки правильного размещения фигуры на сетке игрового поля
 def valid_space(shape, grid):
-    pass
+    # список всех возможных позиций сетки экрана
+    # [[(0, 1)]], [[(2, 3)]] --> [[(0, 1), (2, 3)]]
+    accepted_pos = [[(j, i) for j in range(10) if grid[i][j] == (0, 0, 0)] for i in range(20)]
+    accepted_pos = [j for sub in accepted_pos for j in sub]
+    # отформатированные позиции
+    formatted = convert_shape_format(shape)
+
+    # Цикл по всем отформатированным позициям
+    for pos in formatted:
+        # если позиция не содержится в списке возможных позиций
+        if pos not in accepted_pos:
+            # если координата y позиции больше, чем -1
+            if pos[1] > -1:
+                return False
+    return True
 
 
 # функция проверки условия проигрыша в игре
@@ -226,11 +252,11 @@ def draw_window(surface, grid):
 
 
 # основная функция игры
-def main():
+def main(win):
     # словарь "занятых" позиций сетки
-    locked_postions = {}
+    locked_positions = {}
     # создание сетки из словаря "занятых" позиций
-    grid = create_grid(locked_postions)
+    grid = create_grid(locked_positions)
 
     # изменение фигуры
     change_piece = False
@@ -249,7 +275,98 @@ def main():
     # время увеличения скорости падения фигур на игровом уровне
     level_time = 0
 
+    # основной игровой цикл
+    while run:
+        # создаём сетку из "занятых" позиций
+        grid = create_grid(locked_positions)
+        # рассчитываем время падения, исходя из разницы
+        # между временем предыдущей итерации цикла и текущей
+        fall_time += clock.get_rawtime()
+        # рассчитываем время падения фигур на конкретном уровне
+        level_time += clock.get_rawtime()
+        clock.tick()
+
+        # если время падения фигур на уровне больше 5 секунд
+        if level_time / 1000 > 5:
+            level_time = 0
+        # если скорость падения фигуры больше, чем 0.12
+        if fall_speed > 0.12:
+            # уменьшаем скорость на 0.007
+            fall_speed -= 0.007
+        # если время падения фигуры / 1000 больше, чем скорость падения
+        if fall_time / 1000 > fall_speed:
+            # обнуляем время падения
+            fall_time = 0
+            # увеличиваем координату y текущей фигуры на 1
+            current_piece.y += 1
+            # если пространства сетки не хватает и координата y текущей фигуры больше 0
+            if not (valid_space(current_piece, grid)) and current_piece.y > 0:
+                # уменьшаем координату y на 1
+                current_piece.y -= 1
+                # выставляем флаг смены фигуры в значение "истина"
+                change_piece = True
+        # анализ игровых событий
+        for event in pygame.event.get():
+            # если получено событие выхода из игры
+            if event.type == pygame.QUIT:
+                run = False
+                pygame.display.quit()
+            # если получено событие нажатия клавиш
+            if event.type == pygame.KEYDOWN:
+                # если нажата клавиша "стрелка влево"
+                if event.key == pygame.K_LEFT:
+                    # уменьшаем координату x фигуры на 1
+                    current_piece.x -= 1
+                    if not (valid_space(current_piece, grid)):
+                        current_piece.x += 1
+                # если нажата клавиша "стрелка вправо"
+                if event.key == pygame.K_RIGHT:
+                    # увеличиваем координату x фигуры на 1
+                    current_piece.x += 1
+                    if not (valid_space(current_piece, grid)):
+                        current_piece.x -= 1
+                # если нажата клавиша "стрелка вверх"
+                if event.key == pygame.K_UP:
+                    # вращаем фигуру
+                    current_piece.rotation += 1
+                    if not (valid_space(current_piece, grid)):
+                        current_piece.rotation -= 1
+                # если нажата клавиша "стрелка вниз"
+                if event.key == pygame.K_DOWN:
+                    # увеличиваем на 1 текущую координату y фигуры
+                    current_piece.y += 1
+                    if not (valid_space(current_piece, grid)):
+                        current_piece.y -= 1
+
+        shape_pos = convert_shape_format(current_piece)
+
+        for i in range(len(shape_pos)):
+            x, y = shape_pos[i]
+            if y > -1:
+                grid[y][x] = current_piece.color
+        # если фигура сменилась
+        if change_piece:
+            for pos in shape_pos:
+                p = (pos[0], pos[1])
+                # {(1, 2): (255, 0, 0)}
+                locked_positions[p] = current_piece.color
+            current_piece = next_piece
+            next_piece = get_shape()
+            change_piece = False
+
+        # вызов функции отображения основного окна игры
+        draw_window(win, grid)
+        pygame.display.update()
+
 
 # функция отображения главного меню
-def main_menu():
-    pass
+def main_menu(win):
+    main(win)
+
+
+# задаём размеры окна нашей игры
+win = pygame.display.set_mode((S_WIDTH, S_HEIGHT))
+# указываем название игры в заголовке окна
+pygame.display.set_caption('Тетрис')
+
+main_menu(win)
