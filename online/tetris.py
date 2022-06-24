@@ -219,8 +219,8 @@ def draw_text_middle(surface, text, size, color):
     label = font.render(text, 1, color)
 
     # отображаем текст в середине экрана
-    surface.blit(label, (TOP_LEFT_X + PLAY_WIDTH / 2 - (label.get_width() / 2), TOP_LEFT_Y + PLAY_HEIGHT / 2
-                         - label.get_height() / 2))
+    surface.blit(label, (TOP_LEFT_X + PLAY_WIDTH / 2 - (label.get_width() / 2),
+                         TOP_LEFT_Y + PLAY_HEIGHT / 2 - label.get_height() / 2))
 
 
 # функция отрисовки сетки игрового поля
@@ -233,7 +233,7 @@ def draw_grid(surface, grid):
     for i in range(len(grid)):
         # Рисуем горизонтальные линии
         pygame.draw.line(surface, (128, 128, 128), (sx, sy + i * BLOCK_SIZE), (sx + PLAY_WIDTH, sy + i * BLOCK_SIZE))
-        for j in range(len(grid)):
+        for j in range(len(grid[i])):
             # Рисуем вертикальные линии
             pygame.draw.line(surface, (128, 128, 128), (sx + j * BLOCK_SIZE, sy),
                              (sx + j * BLOCK_SIZE, sy + PLAY_HEIGHT))
@@ -255,7 +255,7 @@ def clear_rows(grid, locked):
             # пытаемся удалить строку из словаря занятых позиций на игровой сетке
             for j in range(len(row)):
                 try:
-                    del locked[[(j, i)]]
+                    del locked[(j, i)]
                 # в противном случае - продолжаем обход в цикле
                 except:
                     continue
@@ -291,8 +291,28 @@ def draw_next_shape(shape, surface):
     surface.blit(label, (sx + 10, sy - 30))
 
 
+# функция подсчёта очков и записи их в файл
+def update_score(nscore):
+    score = max_score()
+
+    with open('score.txt', 'w') as f:
+        if int(score) > nscore:
+            f.write(str(score))
+        else:
+            f.write(str(nscore))
+
+
+# функция определения максимального количества очков
+def max_score():
+    with open('score.txt', 'r') as f:
+        lines = f.readlines()
+        score = lines[0].strip()
+
+    return score
+
+
 # функция отрисовки окна игрового поля
-def draw_window(surface, grid, score=0):
+def draw_window(surface, grid, score=0, last_score=0):
     # заполняем экран игры чёрным цветом
     surface.fill((0, 0, 0))
 
@@ -311,15 +331,15 @@ def draw_window(surface, grid, score=0):
     label = font.render('Очки: ' + str(score), 1, (255, 255, 255))
     # Начальные координаты x и y для показа текущих очков
     sx = TOP_LEFT_X + PLAY_WIDTH + 50
-    sy = TOP_LEFT_X + PLAY_HEIGHT / 2 - 100
+    sy = TOP_LEFT_Y + PLAY_HEIGHT / 2 - 100
     surface.blit(label, (sx + 10, sy + 160))
     # отображение рекордов по очкам
-    # font = pygame.font.SysFont('comicsans', 30)
-    # label = font.render('Рекорд: ' + last_score, 1, (255, 255, 255))
-    # # Начальные координаты x и y для показа рекордов по очкам
-    # sx = TOP_LEFT_X - 200
-    # sy = TOP_LEFT_Y + 200
-    # surface.blit(label, (sx + 10, sy + 160))
+    font = pygame.font.SysFont('comicsans', 30)
+    label = font.render('Рекорд: ' + last_score, 1, (255, 255, 255))
+    # Начальные координаты x и y для показа рекордов по очкам
+    sx = TOP_LEFT_X - 200
+    sy = TOP_LEFT_Y + 200
+    surface.blit(label, (sx + 10, sy + 160))
 
     for i in range(len(grid)):
         for j in range(len(grid[i])):
@@ -333,6 +353,8 @@ def draw_window(surface, grid, score=0):
 
 # основная функция игры
 def main(win):
+    # рекорд по очкам:
+    last_score = max_score()
     # словарь "занятых" (заблокированных) позиций сетки игрового поля
     locked_positions = {}
     # создание сетки из словар "занятых" позиций сетки игрового поля
@@ -351,7 +373,7 @@ def main(win):
     # время падения фигуры
     fall_time = 0
     # скорость падения фигуры
-    fall_speed = 0.60
+    fall_speed = 0.70
     # время увеличения скорости падения фигур на конкретном уровне
     level_time = 0
     # заработанные очки
@@ -442,16 +464,40 @@ def main(win):
             score += clear_rows(grid, locked_positions) * 10
 
         # вызов функции отрисовки основного окна игры
-        draw_window(win, grid, score)
+        draw_window(win, grid, score, last_score)
         # вызов функции отображения следующей фигуры
         draw_next_shape(next_piece, win)
         pygame.display.update()
+        # если всё игровое поле заполнено, то игрок - проиграл
+        if check_lost(locked_positions):
+            draw_text_middle(win, "ВЫ ПРОИГРАЛИ!", 80, (255, 255, 255))
+            pygame.display.update()
+            # задержка в 1.5 сек по времени
+            pygame.time.delay(1500)
+            run = False
+            update_score(score)
     # pygame.display.quit()
 
 
 # функция отображения главного меню
 def main_menu(win):
-    main(win)
+    # main(win)
+    run = True
+    while run:
+        # отображаем инструкции игроку
+        win.fill((0, 0, 0))
+        draw_text_middle(win, "НАЖМИТЕ ЛЮБУЮ КЛАВИШУ ДЛЯ НАЧАЛА", 30, (255, 255, 255))
+        pygame.display.update()
+        for event in pygame.event.get():
+            # если возникло событие завершения игры
+            if event.type == pygame.QUIT:
+                # выходим из игрового цикла и прекращаем выполнение программы
+                run = False
+            # если возникло событие нажатия любой клавиши
+            if event.type == pygame.KEYDOWN:
+                # запускаем игру
+                main(win)
+    pygame.display.quit()
 
 
 # задаём размеры окна нашей игры
