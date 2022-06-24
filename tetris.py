@@ -197,7 +197,11 @@ def valid_space(shape, grid):
 
 # функция проверки условия проигрыша в игре
 def check_lost(positions):
-    pass
+    for pos in positions:
+        x, y = pos
+        if y < 1:
+            return True
+    return False
 
 
 # функция получения фигуры
@@ -207,27 +211,87 @@ def get_shape():
 
 
 # функция отрисовки текста посередине
-def draw_text_middle(text, size, color, surface):
-    pass
+def draw_text_middle(surface, text, size, color):
+    # устанавливаем шрифт для отображения
+    font = pygame.font.SysFont('comicsans', size, bold=True)
+    label = font.render(text, 1, color)
+
+    # отображаем текст посередине экрана
+    surface.blit(label, (TOP_LEFT_X + PLAY_WIDTH / 2 - (label.get_width() / 2),
+                         TOP_LEFT_Y + PLAY_HEIGHT / 2 - label.get_height() / 2))
 
 
 # функция отрисовки сетки игрового поля
 def draw_grid(surface, grid):
-    pass
+    # Начальная координата x
+    sx = TOP_LEFT_X
+    # Начальная координата y
+    sy = TOP_LEFT_Y
+    # На экране рисуем сетку в виде серых линий
+    for i in range(len(grid)):
+        # Горизонтальные линии
+        pygame.draw.line(surface, (128, 128, 128), (sx, sy + i * BLOCK_SIZE),
+                         (sx + PLAY_WIDTH, sy + i * BLOCK_SIZE))
+        for j in range(len(grid[i])):
+            # Вертикальные линии
+            pygame.draw.line(surface, (128, 128, 128), (sx + j * BLOCK_SIZE, sy),
+                             (sx + j * BLOCK_SIZE, sy + PLAY_HEIGHT))
 
 
 # функция очистки игровой сетки
 def clear_rows(grid, locked):
-    pass
+    # переменная счётчика (инкремент)
+    inc = 0
+    # обратный цикл по строкам сетки игры
+    for i in range(len(grid) - 1, -1, -1):
+        row = grid[i]
+        # если в строке нет квадратов чёрного цвета
+        if (0, 0, 0) not in row:
+            # увеличиваем счётчик инкремента на 1
+            inc += 1
+            # запоминаем индекс строки
+            ind = i
+            # пытаемся удалить строки из словаря заполненных позиций на сетке
+            for j in range(len(row)):
+                try:
+                    del locked[(i, j)]
+                # в противном случае - продолжаем обход в цикле
+                except:
+                    continue
+    # сдвигаем все оставшиеся строки на количество строк, которое было удалено,
+    # путём добавления их в начало списка сетки игры
+    # [(0, 1), (0, 0)] --> [(0, 0), (0, 1)]
+    if inc > 0:
+        for key in sorted(list(locked), key=lambda x: x[1])[::-1]:
+            x, y = key
+            if y < ind:
+                new_key = (x, y + inc)
+                locked[new_key] = locked.pop(key)
+    return inc
 
 
 # функция отрисовки следующей игровой фигуры
 def draw_next_shape(shape, surface):
-    pass
+    # установка шрифта для показа следующей фигуры
+    font = pygame.font.SysFont('comicsans', 30)
+    label = font.render('Следующая:', 1, (255, 255, 255))
+    # Начальные координаты для показа следующей фигуры
+    sx = TOP_LEFT_X + PLAY_WIDTH + 50
+    sy = TOP_LEFT_Y + PLAY_HEIGHT / 2 - 100
+    format = shape.shape[shape.rotation % len(shape.shape)]
+    # рисуем и отображаем окно, где будет показываться следующая фигура
+    for i, line in enumerate(format):
+        row = list(line)
+        for j, column in enumerate(row):
+            if column == '0':
+                pygame.draw.rect(surface, shape.color, (sx + j * BLOCK_SIZE, sy + i * BLOCK_SIZE,
+                                                        BLOCK_SIZE, BLOCK_SIZE), 0)
+    # отображаем текст "Следующая фигура" по заданным координатам
+    surface.blit(label, (sx + 10, sy - 30))
 
 
 # функция отрисовки окна игрового поля
-def draw_window(surface, grid):
+def draw_window(surface, grid, score=0):
     # заполняем игровую область чёрным цветом
     surface.fill((0, 0, 0))
 
@@ -240,6 +304,14 @@ def draw_window(surface, grid):
 
     # отображаем название игры в центре экрана
     surface.blit(label, (TOP_LEFT_X + PLAY_WIDTH / 2 - (label.get_width() / 2), 30))
+
+    # установка шрифта для отображения очков игрока
+    font = pygame.font.SysFont('comicsans', 30)
+    label = font.render('Очки: ' + str(score), 1, (255, 255, 255))
+    # Начальные координаты x и y для показа текущих очков
+    sx = TOP_LEFT_X - 200
+    sy = TOP_LEFT_Y + 200
+    surface.blit(label, (sx + 10, sy + 160))
 
     for i in range(len(grid)):
         for j in range(len(grid[i])):
@@ -274,6 +346,8 @@ def main(win):
     fall_speed = 0.60
     # время увеличения скорости падения фигур на игровом уровне
     level_time = 0
+    # очки игрока
+    score = 0
 
     # основной игровой цикл
     while run:
@@ -353,10 +427,20 @@ def main(win):
             current_piece = next_piece
             next_piece = get_shape()
             change_piece = False
+            # очищаем строки и добавляем их в количество заработанных игроков очков
+            score += clear_rows(grid, locked_positions) * 10
 
         # вызов функции отображения основного окна игры
-        draw_window(win, grid)
+        draw_window(win, grid, score)
+        # вызов функции отображения следующей фигуры
+        draw_next_shape(next_piece, win)
         pygame.display.update()
+        # если игровое поле полностью заполнено
+        if check_lost(locked_positions):
+            draw_text_middle(win, "ВЫ ПРОИГРАЛИ!", 80, (255, 255, 255))
+            pygame.display.update()
+            pygame.time.delay(1500)
+            run = False
 
 
 # функция отображения главного меню
