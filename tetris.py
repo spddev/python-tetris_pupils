@@ -1,5 +1,6 @@
 import pygame
 import random
+from pygame import mixer
 
 
 # создание структуры данных для игровых фигур
@@ -143,6 +144,16 @@ shapes = [S, Z, I, O, J, L, T]
 # индекс 0 - 6 представляет конкретную фигуру
 shape_colors = [(0, 255, 0), (255, 0, 0), (0, 255, 255), (255, 255, 0), (255, 165, 0), (0, 0, 255), (128, 0, 128)]
 
+# Звуки и музыка
+mixer.init()
+# Звуки
+click_sound = mixer.Sound('assets/sounds/SFX_ButtonUp.wav')
+move_sound = mixer.Sound('assets/sounds/SFX_PieceMoveLR.wav')
+drop_sound = mixer.Sound('assets/sounds/SFX_PieceHardDrop.wav')
+single_sound = mixer.Sound('assets/sounds/SFX_SpecialLineClearSingle.wav')
+double_sound = mixer.Sound('assets/sounds/SFX_SpecialLineClearDouble.wav')
+triple_sound = mixer.Sound('assets/sounds/SFX_SpecialLineClearTriple.wav')
+tetris_sound = mixer.Sound('assets/sounds/SFX_SpecialTetris.wav')
 
 # класс параметров конкретной фигуры
 class Piece(object):
@@ -275,6 +286,16 @@ def clear_rows(grid, locked):
             x, y = key
             if y < ind:
                 newKey = (x, y + inc)
+                # проигрываем звуковые эффекты в зависимости от количества полученных линий
+                if inc == 1:
+                    single_sound.set_volume(0.6)
+                    single_sound.play()
+                elif inc % 2 == 0:
+                    double_sound.set_volume(0.6)
+                    double_sound.play()
+                elif inc % 3 == 0:
+                    triple_sound.set_volume(0.6)
+                    triple_sound.play()
                 locked[newKey] = locked.pop(key)
     return inc
 
@@ -316,6 +337,25 @@ def max_score():
         lines = f.readlines()
         score = lines[0].strip()
     return score
+
+
+# функция определения нового игрового уровня
+def next_level(score):
+    # словарь игровых уровней и очков для них
+    score_lvls = {0: 1, 100: 2, 200: 3, 300: 4, 500: 5, 1000: 6}
+    if score in range(0, 100):
+        level = score_lvls.get(0)
+    elif score in range(100, 200):
+        level = score_lvls.get(100)
+    elif score in range(200, 300):
+        level = score_lvls.get(200)
+    elif score in range(300, 500):
+        level = score_lvls.get(300)
+    elif score in range(500, 1000):
+        level = score_lvls.get(500)
+    elif score >= 1000:
+        level = score_lvls.get(1000)
+    return level
 
 
 # функция отрисовки окна игры
@@ -366,7 +406,7 @@ def draw_window(surface, grid, score=0, last_score=0, level=1):
 
 
 # основная функции игры
-def main(win):
+def main(win, level):
     # последнее значение очков
     last_score = max_score()
     # словарь заблокированных позиций сетки
@@ -392,6 +432,17 @@ def main(win):
     level_time = 0
     # заработанные игроком очки
     score = 0
+    # Музыка
+    if level in range(1, 3):
+        mixer.music.stop()
+        mixer.music.load('assets/music/tetris_song_level_1_2.mp3')
+        mixer.music.set_volume(0.5)
+        mixer.music.play(-1)
+    elif level >= 3:
+        mixer.music.stop()
+        mixer.music.load('assets/music/tetris_song_level_3.mp3')
+        mixer.music.set_volume(0.5)
+        mixer.music.play(-1)
 
     # основной игровой цикл
     while run:
@@ -403,6 +454,8 @@ def main(win):
         # высчитываем время падения фигур на конкретном уровне
         level_time += clock.get_rawtime()
         clock.tick()
+        # устанавливаем уровень игры
+        level = next_level(score)
 
         # если время падения фигур на уровне больше 5 секунд
         if level_time / 1000 > 5:
@@ -433,28 +486,52 @@ def main(win):
             if event.type == pygame.KEYDOWN:
                 # если нажата клавиша "стрелка влево"
                 if event.key == pygame.K_LEFT:
+                    # играем звук движения фигуры
+                    move_sound.set_volume(0.7)
+                    move_sound.play()
                     # уменьшаем на 1 текущую координату x фигуры
                     current_piece.x -= 1
                     if not (valid_space(current_piece, grid)):
+                        # играем звук движения фигуры
+                        move_sound.set_volume(0.7)
+                        move_sound.play()
                         current_piece.x += 1
                 # если нажата клавиша "стрелка вправо"
                 if event.key == pygame.K_RIGHT:
+                    # играем звук движения фигуры
+                    move_sound.set_volume(0.7)
+                    move_sound.play()
                     # увеличиваем на 1 текущую координату x фигуры
                     current_piece.x += 1
                     # если пространство не позволяет, то меняем фигуру
                     if not (valid_space(current_piece, grid)):
+                        # играем звук движения фигуры
+                        move_sound.set_volume(0.7)
+                        move_sound.play()
                         current_piece.x -= 1
                 # если нажата клавиша "стрелка вниз"
                 if event.key == pygame.K_DOWN:
+                    # играем звук ускоренного падения фигуры
+                    drop_sound.set_volume(0.7)
+                    drop_sound.play()
                     # увеличиваем на 1 текущую координату y фигуры
                     current_piece.y += 1
                     if not (valid_space(current_piece, grid)):
+                        # играем звук ускоренного падения фигуры
+                        drop_sound.set_volume(0.7)
+                        drop_sound.play()
                         current_piece.y -= 1
                 # если нажата клавиша "стрелка вверх"
                 if event.key == pygame.K_UP:
+                    # играем звук вращения фигуры
+                    click_sound.set_volume(0.7)
+                    click_sound.play()
                     # вращаем фигуру
                     current_piece.rotation += 1
                     if not (valid_space(current_piece, grid)):
+                        # играем звук вращения фигуры
+                        click_sound.set_volume(0.7)
+                        click_sound.play()
                         current_piece.rotation -= 1
 
         shape_pos = convert_shape_format(current_piece)
@@ -482,6 +559,9 @@ def main(win):
         # если все позиции игрового поля заняты фигурами
         if check_lost(locked_positions):
             draw_text_middle(win, "ВЫ ПРОИГРАЛИ!", 80, (255, 255, 255))
+            mixer.music.stop()
+            tetris_sound.set_volume(0.6)
+            tetris_sound.play()
             pygame.display.update()
             pygame.time.delay(1500)
             run = False
@@ -507,7 +587,7 @@ def main_menu(win):
             # если возникло события нажатия любой клавиши
             if event.type == pygame.KEYDOWN:
                 # запускаем игру
-                main(win)
+                main(win, level=1)
 
     pygame.display.quit()
 
